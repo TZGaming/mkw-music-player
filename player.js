@@ -19,19 +19,6 @@ let excludedTracks = new Set(), history = [], historyPointer = -1;
 // ---------- SHUFFLE POOL ----------
 let shufflePool = []; // Tracks nog niet gespeeld in de huidige shuffle-ronde
 
-// Mapping van hostname naar volledige radiosite-naam
-const SITE_NAMES = {
-    "marioradio.tzgaming.nl": "Super Mario Radio",
-    "tzgaming.github.io/mkw-music-player/": "MK World Radio",
-    "dkradio.tzgaming.nl": "Donkey Kong Radio",
-    "luigiradio.tzgaming.nl": "Luigi Radio"
-};
-
-function getSiteName() {
-    const hostname = window.location.hostname; // alleen domein
-    return SITE_NAMES[hostname] || "Unknown Radio"; // fallback
-}
-
 // ---------- HELPERS ----------
 const shuffleArray = arr => {
     for (let i = arr.length - 1; i > 0; i--) {
@@ -87,66 +74,22 @@ function playTrack(index, fromHistory = false) {
         if (!isNaN(audioPlayer.duration)) timeDisplay.textContent = `0:00 / ${formatTime(audioPlayer.duration)}`;
     }, { once: true });
 
-    try {
-        // Media Session
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.metadata = new MediaMetadata({
-                title: track.title || 'Unknown Track',
-                artist: track.game || 'Mario Kart World',
-                album: "Mario Kart World Radio",
-                artwork: [{ src: track.artwork || 'assets/player-img/cover.png', sizes: '512x512', type: 'image/png' }]
-            });
-
-            navigator.mediaSession.setActionHandler('play', () => audioPlayer.play());
-            navigator.mediaSession.setActionHandler('pause', () => audioPlayer.pause());
-            navigator.mediaSession.setActionHandler('previoustrack', () => playPreviousTrack());
-            navigator.mediaSession.setActionHandler('nexttrack', () => playNextTrack());
-            navigator.mediaSession.setActionHandler('seekbackward', (details) => {
-                audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - (details.seekOffset || 10));
-            });
-            navigator.mediaSession.setActionHandler('seekforward', (details) => {
-                audioPlayer.currentTime = Math.min(audioPlayer.duration, audioPlayer.currentTime + (details.seekOffset || 10));
-            });
-            navigator.mediaSession.setActionHandler('seekto', (details) => {
-                if (details.fastSeek && 'fastSeek' in audioPlayer) audioPlayer.fastSeek(details.seekTime);
-                else audioPlayer.currentTime = details.seekTime;
-            });
-        }
-
-        // --- DISCORD RPC UPDATE (failsafe) ---
-        const sendRPCUpdate = async () => {
-            try {
-                await fetch("http://localhost:3000/update", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        title: track.title || "Unknown Track",
-                        artist: track.cdName || "Unknown Game",
-                        artwork: track.artwork || null,
-                        duration: audioPlayer.duration || 0,
-                        currentTime: audioPlayer.currentTime || 0,
-                        smallImageText: getSiteName()
-                    }),
-                });
-            } catch {
-                // Silent fail
-            }
-        };
-
-        // Eerste update
-        if (audioPlayer.readyState >= 1) sendRPCUpdate();
-        else audioPlayer.addEventListener('loadedmetadata', sendRPCUpdate, { once: true });
-
-        // Update bij track laden
-        audioPlayer.addEventListener('loadedmetadata', sendRPCUpdate, { once: true });
-
-        updateActiveTrack();
-    } catch (err) {
-        console.error("Kon track niet afspelen:", err);
+    // Media Session
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: track.title || 'Unknown Track',
+            artist: track.game || 'Mario Kart World',
+            album: "Mario Kart World Radio",
+            artwork: [{ src: track.artwork || 'assets/player-img/cover.png', sizes: '512x512', type: 'image/png' }]
+        });
+        navigator.mediaSession.setActionHandler('play', () => audioPlayer.play());
+        navigator.mediaSession.setActionHandler('pause', () => audioPlayer.pause());
+        navigator.mediaSession.setActionHandler('previoustrack', playPreviousTrack);
+        navigator.mediaSession.setActionHandler('nexttrack', playNextTrack);
     }
+
+    updateActiveTrack();
 }
-
-
 
 // ---------- SHUFFLE HELP ----------
 function getNextShuffleTrack() {
