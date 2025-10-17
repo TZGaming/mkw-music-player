@@ -32,7 +32,7 @@ h1 {
     font-weight: normal;
 }
 
-h2, h3, label, button {
+h2, h3, label, button, p, a{
     color: white;
     font-family: MKWorld;
     font-weight: normal;
@@ -43,6 +43,14 @@ h4, h5 {
     font-family: MKWorld;
     font-weight: normal;
     margin-top: -1px;
+}
+
+span {
+    font-family: MKWorld;
+}
+
+.moved-txt {
+    margin-top: 100px;
 }
 
 #nextBtn i {
@@ -61,6 +69,116 @@ h4, h5 {
 
 #prevBtn:hover i {
   margin-right: 10px;
+}
+
+span#downloadProgressText {
+    font-family: MKWorld;
+    color: white;
+    font-size: 12px;
+    font-weight: normal;
+}
+
+/* Download button styling gelijk aan audio player buttons */
+#downloadAllBtn {
+    background: #444;
+    border: none;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: MKWorld;
+    transition: all 0.2s ease;
+    display: none;
+}
+
+#downloadAllBtn.show {
+    display: block;
+}
+
+#downloadProgress {
+    width: 300px; /* of 100% */
+    height: 20px;
+    background-color: #333;
+    border-radius: 20px;
+    overflow: hidden; /* <--- belangrijk */
+}
+
+#downloadProgressBar {
+    width: 0%;
+    height: 100%;
+    background-color: #4caf50;
+    border-radius: 20px; /* dit wordt nu afgerond */
+    transition: width 0.2s ease;
+}
+
+
+#downloadAllBtn:hover {
+    background-color: #505050;
+    transform: scale(1.05);
+}
+
+/* style.css */
+#downloadAllBtn,
+#downloadProgress,
+#downloadProgressText {
+    display: none;
+}
+
+#downloadProgress,
+#downloadProgressText {
+    display: none; /* standaard verborgen */
+    margin: 0;     /* verwijder onderliggende marge */
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+}
+
+#downloadProgress.show,
+#downloadProgressText.show {
+    display: block; /* of inline-block voor de span */
+    max-height: 50px; /* genoeg ruimte om uit te klappen */
+    opacity: 1;
+}
+
+#downloadCurrentBtn {
+    background: #444;
+    border: none;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: MKWorld;
+    transition: all 0.2s ease;
+}
+
+#downloadCurrentBtn:hover {
+    background-color: #505050;
+    transform: scale(1.05);
+}
+
+.downloads {
+    display: flex;
+    gap: 8px; /* ruimte tussen Current en All */
+    align-items: flex-start;
+    margin-top: 10px;
+}
+
+.download-all-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* centreert de tekst onder de knop */
+}
+
+.cache-text {
+    display: none;
+    font-size: 0.75em;
+    color: #ccc;
+    margin-top: 2px;
+}
+
+.cache-text.show {
+    display: block;
 }
 
 audio {
@@ -148,26 +266,47 @@ footer {
     padding: 10px;
     margin-bottom: -20px;
     color: white;
-    opacity: 20%;
     font-family: MKWorld;
     font-weight: normal;
     pointer-events: none;
 }
 
+.footer-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: min(90%, 800px);
+  color: white;
+  opacity: 30%;
+  font-family: MKWorld;
+  font-size: 20px;
+  font-weight: normal;
+  pointer-events: auto; /* maakt footer interactief */
+}
+
+footer h4 {
+    opacity: 20%;
+}
+
+footer button {
+    opacity: 20%;
+}
+
 /* ---------- MUSIC PLAYER ---------- */
 article.musicplayer {
-    position: relative;
+    position: relative;      /* zorgt dat het blijft "floaten" */
+    right: 20px;
     display: flex;
     flex-direction: row;
-    align-items: center;
-    justify-content: flex-start;
+    align-items: flex-start;
+    justify-content: center;
     gap: 20px;
     max-width: 750px;
-    width: 700px;
+    width: 650px;
     border-radius: 2rem;
     background: rgb(41, 41, 41);
     padding: 1.5rem;
-    height: 275px;
+    height: auto;
 }
 
 /* ---------- ALBUM ART ---------- */
@@ -198,13 +337,15 @@ article.musicplayer {
     border-radius: 15px;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    align-items: center;      /* horizontaal gecentreerd */
+    justify-content: flex-start; /* bovenaan uitlijnen */
     width: 100%;
     max-width: 350px;
-    height: 275px;
-    padding: 20px;
+    padding: 0;
     box-sizing: border-box;
+    height: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
 }
 
 .metadata-box h1,
@@ -219,11 +360,12 @@ article.musicplayer {
 #metadata {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    text-align: center;
+    align-items: center; /* horizontaal gecentreerd */
+    text-align: center;  /* tekst centreren */
     gap: 4px;
     width: 100%;
     min-width: 0;
+    margin: 0;
 }
 
 /* ---------- VOLUME ---------- */
@@ -262,10 +404,11 @@ article.musicplayer {
 
 /* ---------- DROPDOWN BUTTON ---------- */
 .dropdown-toggle {
-    position: absolute; /* of relative t.o.v. parent */
-    top: 84%;           /* pas aan afhankelijk van waar je hem wilt */
-    right: 5%;           /* of left: 0; afhankelijk van positie */
+    position: fixed; /* of relative t.o.v. parent */
+    bottom: -20px;           /* pas aan afhankelijk van waar je hem wilt */
+    left: 167px;           /* of left: 0; afhankelijk van positie */
     transform: translateY(-50%); /* center horizontaal en verticaal */
+    margin-right: -25px;
     width: 40px;        /* cirkelbreedte */
     height: 40px;       /* cirkelhoogte */
     border-radius: 50%; /* maakt het een cirkel */
@@ -275,7 +418,7 @@ article.musicplayer {
     display: flex;
     justify-content: center;
     align-items: center;
-    color: white;
+    color: rgb(255, 255, 255);
     font-size: 18px;    /* grootte van de gear */
     z-index: 20;
     transition: transform 0.3s ease;
@@ -286,24 +429,30 @@ article.musicplayer {
 }
 
 /* ---------- DROPDOWN MENU ---------- */
-.dropdown {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translateY(-50%);
-    display: none;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-    background-color: #292929;
-    padding: 10px;
-    border-radius: 10px;
-    box-shadow: 0px 8px 16px rgba(0,0,0,0.2);
-    width: 450px;
-    max-height: 80vh;
-    overflow-y: auto;
-    z-index: 999;
+.settings-container {
+  position: relative; /* maakt absolute positioning van .dropdown t.o.v. deze container mogelijk */
 }
+
+.dropdown {
+  display: none; /* standaard verborgen */
+  position: absolute;
+  bottom: 25px;  /* vanaf de button omhoog */
+  right: 0;
+  background: #292929;
+  border-radius: 10px;
+  box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+  padding: 10px 15px;
+  flex-direction: column;
+  gap: 8px;
+  width: 430px;
+  z-index: 1000;
+  margin-right: 250px;
+  opacity: 1;     /* volle opacity */
+}
+.dropdown.open {
+  display: flex;
+}
+
 
 /* ---------- SWITCH ---------- */
 .switch {
@@ -651,13 +800,14 @@ i {
         padding: 10px 8px;    /* voor consistente spacing */
     }
 
-    .dropdown {
-        width: 385px;
-        scale: 0.85;
-    }
-
     .slider {
         scale: 1.15;
+    }
+
+    .dropdown {
+        margin-right: -50px;
+        scale: 0.85;
+        width: 400px;
     }
 
     .dropdown-content {
@@ -669,12 +819,16 @@ i {
     }
 
     article.musicplayer {
+        position: relative;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 90%;
+        max-width: 300px;
+        margin: 0 auto;
         flex-direction: column;
         align-items: center;
         gap: 10px;
-        width: 90%;
-        max-width: 300px;
-        height: auto;
+        text-align: center;
     }
 
     .artwork-wrapper {
@@ -729,8 +883,14 @@ i {
     }
 
     #metadata h1 {
+        display: block;
+        width: 100%;
+        max-width: 100%;
         font-size: 25px;
-        word-break: break-word;
+        overflow-wrap: break-word;
+        text-align: center;
+        white-space: normal;
+        margin: 0 auto;
     }
 
     #metadata h3 {
@@ -748,13 +908,6 @@ i {
         cursor: pointer;
         min-width: 10px;
         min-height: 45px;
-    }
-
-    .dropdown-toggle {
-        position: absolute;
-        top: 63%;
-        right: 5px;
-        transform: translateY(-50%);
     }
 
     .progress-wrapper,
@@ -796,7 +949,6 @@ i {
         flex-direction: column;
         max-width: 350px;
         flex-shrink: 0;
-        height: 580px;
     }
 
     .tracklist-container {
@@ -804,18 +956,10 @@ i {
         max-width: 300px;
         order: 0;
     }
-
-    .dropdown-toggle {
-        top: 65%;
-        right: 5px;
-    }
 }
 
 /* ========== DESKTOP: 1025px - 1400px ========== */
 @media screen and (min-width: 1025px) and (max-width: 1400px) {
-    .dropdown {
-        width: 385px;
-    }
 
     .dropdown-content {
         gap: 6px;
@@ -831,7 +975,6 @@ i {
         gap: 10px;
         width: 90%;
         max-width: 300px;
-        height: auto;
         flex-shrink: 0;
     }
 
@@ -906,13 +1049,6 @@ i {
         cursor: pointer;
         min-width: 10px;
         min-height: 45px;
-    }
-
-    .dropdown-toggle {
-        position: absolute;
-        top: 63%;
-        right: 0px;
-        transform: translateY(-50%);
     }
 
     .progress-wrapper,

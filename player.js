@@ -9,6 +9,7 @@ const nextBtn = document.getElementById('nextBtn');
 const progressBar = document.getElementById('progressBar');
 const timeDisplay = document.getElementById('timeDisplay');
 const volumeSlider = document.getElementById('volumeSlider');
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 const tracklistContainer = document.getElementById('tracklist');
 
 let cd1Tracks = [], cd2Tracks = [], cd3Tracks = [], cd4Tracks = [];
@@ -18,6 +19,104 @@ let excludedTracks = new Set(), history = [], historyPointer = -1;
 
 // ---------- SHUFFLE POOL ----------
 let shufflePool = []; // Tracks nog niet gespeeld in de huidige shuffle-ronde
+
+// Mapping van hostname naar volledige radiosite-naam
+const SITE_NAMES = {
+    "marioradio.tzgaming.nl": "Super Mario Radio",
+    "tzgaming.github.io/mkw-music-player/": "Mario Kart World Radio",
+    "dkradio.tzgaming.nl": "Donkey Kong Radio",
+    "luigiradio.tzgaming.nl": "Luigi Radio"
+};
+
+function getSiteName() {
+    const hostname = window.location.hostname; // alleen domein
+    return SITE_NAMES[hostname] || "Unknown Radio"; // fallback
+}
+
+// ---------- GET CACHED AUDIO ----------
+const CACHE_NAME = 'world-audio-cache';
+
+// ---------- GET CACHED AUDIO (ROBUST) ----------
+async function getCachedAudio(url) {
+    const absUrl = new URL(url, location.origin).href;
+
+    try {
+        const cache = await caches.open(CACHE_NAME);
+
+        // 1️⃣ Eerst checken of het al in cache zit
+        let response = await cache.match(absUrl);
+        if (response) {
+            console.log(`Audio loaded from cache: ${absUrl}`);
+            return await response.blob();
+        }
+
+        // 2️⃣ Niet in cache, fetch van netwerk
+        console.log(`Audio not in cache, fetching from network: ${absUrl}`);
+        const networkResponse = await fetch(absUrl, { mode: 'cors', credentials: 'omit' });
+
+        // 3️⃣ Alleen cachen als OK en niet-opaque (Safari kan opaque niet cachen)
+        if (networkResponse.ok && networkResponse.type !== 'opaque') {
+            try {
+                await cache.put(absUrl, networkResponse.clone());
+                console.log(`Audio cached: ${absUrl}`);
+            } catch (err) {
+                console.warn(`Failed to cache audio: ${absUrl}`, err);
+            }
+        } else if (!networkResponse.ok || networkResponse.type === 'opaque') {
+            console.warn(`Audio not cached (invalid or opaque): ${absUrl}`);
+        }
+
+        // 4️⃣ Return blob voor afspelen
+        return await networkResponse.blob();
+
+    } catch (err) {
+        console.error(`getCachedAudio failed for ${url}:`, err);
+
+        // 5️⃣ Laatste redmiddel: fetch zonder caching
+        try {
+            const fallback = await fetch(absUrl);
+            return await fallback.blob();
+        } catch (fetchErr) {
+            console.error(`Fallback fetch failed for ${url}:`, fetchErr);
+            throw fetchErr;
+        }
+    }
+}
+
+
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+        .then(reg => console.log('Service Worker geregistreerd:', reg.scope))
+        .catch(err => console.error('Service Worker registratie mislukt:', err));
+    });
+}
+
+// ---------- VERBERG / VERWIJDER DOWNLOAD UI ----------
+function hideDownloadUI() {
+    const wrapper = document.querySelector('.download-all-wrapper');
+    const downloadBtn = document.getElementById('downloadAllBtn');
+    const progressBarContainer = document.getElementById('downloadProgress');
+    const progressText = document.getElementById('downloadProgressText');
+    const cacheText = document.getElementById('cacheText');
+    const volume = document.querySelector('.volume-control-horizontal');
+
+    wrapper?.remove();
+    downloadBtn?.remove();
+
+    if (progressBarContainer) {
+        progressBarContainer.style.display = 'none';
+        progressBarContainer.style.margin = '0';
+    }
+    if (progressText) {
+        progressText.style.display = 'none';
+        progressText.style.margin = '0';
+    }
+    if (cacheText) cacheText.style.display = 'none';
+
+    if (volume) 
+        volume.style.marginTop = '10px';
+}
 
 // ---------- HELPERS ----------
 const shuffleArray = arr => {
@@ -44,52 +143,149 @@ const updateActiveTrack = () => {
 };
 
 // ---------- PLAY TRACK ----------
-function playTrack(index, fromHistory = false) {
+let currentAudioURL = null; // Houdt de huidige object URL bij
+
+async function playTrack(index, fromHistory = false) {
     if (!tracks.length || index == null || index < 0 || index >= tracks.length) return;
     currentTrack = index;
     const track = tracks[index];
-    audioPlayer.src = encodeURI(track.url);
-    audioPlayer.currentTime = 0;
-    audioPlayer.load();
-    audioPlayer.play().catch(() => {});
 
-    // History
-    if (!fromHistory) {
-        if (historyPointer < history.length - 1) history = history.slice(0, historyPointer + 1);
-        history.push(index);
-        historyPointer = history.length - 1;
-        if (!playInOrder) shufflePool = shufflePool.filter(i => i !== index);
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+    try {
+        // Ruim vorige object URL op
+        if (currentAudioURL) {
+            try { URL.revokeObjectURL(currentAudioURL); } catch {}
+            currentAudioURL = null;
+        }
+
+        // ---------- AUDIO: iOS = direct URL, desktop/Android = blob ----------
+        if (isIOS) {
+            audioPlayer.src = track.url;
+            // Achtergrond caching
+            getCachedAudio(track.url).catch(() => {});
+        } else {
+            const blob = await getCachedAudio(track.url);
+            currentAudioURL = URL.createObjectURL(blob);
+            audioPlayer.src = currentAudioURL;
+        }
+
+        audioPlayer.currentTime = 0;
+        audioPlayer.load();
+
+        // Probeer autoplay
+        try { await audioPlayer.play(); } catch {}
+
+        // ---------- HISTORY ----------
+        if (!fromHistory) {
+            if (historyPointer < history.length - 1) history = history.slice(0, historyPointer + 1);
+            history.push(index);
+            historyPointer = history.length - 1;
+            if (!playInOrder) shufflePool = shufflePool.filter(i => i !== index);
+        }
+
+        // ---------- UI UPDATE ----------
+        titleEl.textContent = track.title || '-';
+        gameEl.textContent = track.game || '';
+        gameEl.style.visibility = track.game ? 'visible' : 'hidden';
+        gameEl.classList.toggle('hidden', !track.game);
+        progressBar.style.width = '0%';
+
+        // ---------- ARTWORK ----------
+        const artworkURL = track.artwork || 'assets/player-img/cover.png';
+        try {
+            const cache = await caches.open(CACHE_NAME);
+            const absArtworkUrl = new URL(artworkURL, location.origin).href;
+            const cachedArtworkResponse = await cache.match(absArtworkUrl);
+
+            // Revoke vorige artwork blob
+            if (artworkEl.dataset.objectUrl?.startsWith('blob:')) {
+                try { URL.revokeObjectURL(artworkEl.dataset.objectUrl); } catch {}
+                delete artworkEl.dataset.objectUrl;
+            }
+
+            if (cachedArtworkResponse) {
+                const blob = await cachedArtworkResponse.blob();
+                const objectUrl = URL.createObjectURL(blob);
+                artworkEl.src = objectUrl;
+                artworkEl.dataset.objectUrl = objectUrl;
+            } else {
+                artworkEl.src = artworkURL;
+                // Achtergrond cache
+                (async () => {
+                    try {
+                        const resp = await fetch(artworkURL);
+                        if (resp.ok) await cache.put(absArtworkUrl, resp.clone());
+                    } catch {}
+                })();
+            }
+        } catch {
+            artworkEl.src = artworkURL;
+        }
+
+        artworkEl.style.objectPosition = 'center center';
+
+        // ---------- TIME DISPLAY ----------
+        audioPlayer.addEventListener("loadedmetadata", () => {
+            if (!isNaN(audioPlayer.duration)) {
+                timeDisplay.textContent = `0:00 / ${formatTime(audioPlayer.duration)}`;
+            }
+        }, { once: true });
+
+        updateActiveTrack();
+
+        // ---------- MEDIA SESSION ----------
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: track.title || 'Unknown Track',
+                artist: track.game || 'Mario Kart World',
+                album: "Mario Kart World Radio",
+                artwork: [{ src: track.artwork || 'assets/player-img/cover.png', sizes: '512x512', type: 'image/png' }]
+            });
+
+            navigator.mediaSession.setActionHandler('play', () => audioPlayer.play());
+            navigator.mediaSession.setActionHandler('pause', () => audioPlayer.pause());
+            navigator.mediaSession.setActionHandler('previoustrack', playPreviousTrack);
+            navigator.mediaSession.setActionHandler('nexttrack', playNextTrack);
+            navigator.mediaSession.setActionHandler('seekbackward', details => {
+                audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - (details.seekOffset || 10));
+            });
+            navigator.mediaSession.setActionHandler('seekforward', details => {
+                audioPlayer.currentTime = Math.min(audioPlayer.duration, audioPlayer.currentTime + (details.seekOffset || 10));
+            });
+            navigator.mediaSession.setActionHandler('seekto', details => {
+                if (details.fastSeek && 'fastSeek' in audioPlayer) audioPlayer.fastSeek(details.seekTime);
+                else audioPlayer.currentTime = details.seekTime;
+            });
+        }
+
+        // ---------- DISCORD RPC UPDATE (failsafe) ----------
+        const sendRPCUpdate = async () => {
+            try {
+                await fetch("http://localhost:3000/update", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        title: track.title || "Unknown Track",
+                        game: track.game || undefined,
+                        artwork: track.artwork || null,
+                        duration: audioPlayer.duration || 0,
+                        currentTime: audioPlayer.currentTime || 0,
+                        smallImageText: getSiteName()
+                    })
+                });
+            } catch {}
+        };
+
+        if (audioPlayer.readyState >= 1) sendRPCUpdate();
+        else audioPlayer.addEventListener('loadedmetadata', sendRPCUpdate, { once: true });
+
+    } catch (err) {
+        console.error("Kon track niet afspelen:", err);
     }
-
-    // UI update
-    titleEl.textContent = track.title || '-';
-    artworkEl.src = track.artwork || 'assets/player-img/cover.png';
-    artworkEl.style.objectPosition = 'center center';
-    gameEl.textContent = track.game || '';
-    gameEl.style.visibility = track.game ? 'visible' : 'hidden';
-    gameEl.classList.toggle('hidden', !track.game);
-    progressBar.style.width = '0%';
-
-    audioPlayer.addEventListener("loadedmetadata", () => {
-        if (!isNaN(audioPlayer.duration)) timeDisplay.textContent = `0:00 / ${formatTime(audioPlayer.duration)}`;
-    }, { once: true });
-
-    // Media Session
-    if ('mediaSession' in navigator) {
-        navigator.mediaSession.metadata = new MediaMetadata({
-            title: track.title || 'Unknown Track',
-            artist: track.game || 'Mario Kart World',
-            album: "Mario Kart World Radio",
-            artwork: [{ src: track.artwork || 'assets/player-img/cover.png', sizes: '512x512', type: 'image/png' }]
-        });
-        navigator.mediaSession.setActionHandler('play', () => audioPlayer.play());
-        navigator.mediaSession.setActionHandler('pause', () => audioPlayer.pause());
-        navigator.mediaSession.setActionHandler('previoustrack', playPreviousTrack);
-        navigator.mediaSession.setActionHandler('nexttrack', playNextTrack);
-    }
-
-    updateActiveTrack();
 }
+
+
 
 // ---------- SHUFFLE HELP ----------
 function getNextShuffleTrack() {
@@ -154,6 +350,7 @@ audioPlayer.addEventListener('timeupdate', () => {
     timeDisplay.textContent = `${formatTime(current)} / ${formatTime(total)}`;
 });
 
+
 if (volumeSlider) {
     audioPlayer.volume = volumeSlider.value / 100;
     volumeSlider.addEventListener('input', () => audioPlayer.volume = volumeSlider.value / 100);
@@ -168,15 +365,19 @@ function updateTrackList(keepCurrent = false) {
     playInOrder = document.getElementById('playInOrder')?.checked;
 
     const currentTrackObj = tracks[currentTrack];
-    const newTracks = [];
 
+    // Nieuwe tracklijst samenstellen
+    const newTracks = [];
     if (!excludeCD1) newTracks.push(...cd1Tracks.filter(t => !excludedTracks.has(t.url)));
     if (!excludeCD2) newTracks.push(...cd2Tracks.filter(t => !excludedTracks.has(t.url)));
     if (!excludeCD3) newTracks.push(...cd3Tracks.filter(t => !excludedTracks.has(t.url)));
     if (!excludeCD4) newTracks.push(...cd4Tracks.filter(t => !excludedTracks.has(t.url)));
 
+    // Opslaan van oude tracks voor shufflePool-update
+    const oldTracks = tracks;
     tracks = newTracks;
 
+    // Huidige track index behouden
     if (keepCurrent && currentTrackObj) {
         const newIndex = tracks.findIndex(t => t.url === currentTrackObj.url);
         currentTrack = newIndex !== -1 ? newIndex : 0;
@@ -186,15 +387,34 @@ function updateTrackList(keepCurrent = false) {
         else if (currentTrack >= tracks.length) currentTrack = tracks.length ? tracks.length - 1 : 0;
     }
 
-    shufflePool = !playInOrder
-        ? tracks.map((t,i)=>i).filter(i => i !== currentTrack && !excludedTracks.has(tracks[i].url))
-        : [];
+    // Shuffle pool bijwerken zonder reset
+    if (!playInOrder) {
+        const newShufflePool = [];
 
-    shuffleArray(shufflePool);
+        // Bestaande shufflePool behouden, maar filter tracks die nu weg zijn
+        shufflePool.forEach(idx => {
+            if (tracks[idx] && !excludedTracks.has(tracks[idx].url)) {
+                newShufflePool.push(idx);
+            }
+        });
+
+        // Voeg nieuwe tracks toe die nog niet in shufflePool zitten
+        tracks.forEach((t, i) => {
+            if (!newShufflePool.includes(i) && i !== currentTrack) {
+                newShufflePool.push(i);
+            }
+        });
+
+        shufflePool = newShufflePool;
+        shuffleArray(shufflePool); // optioneel: shuffle de nieuwe tracks
+    } else {
+        shufflePool = [];
+    }
 
     renderTracklist();
     updateActiveTrack();
 }
+
 
 // ---------- LOAD TRACKS ----------
 Promise.all([
@@ -221,14 +441,15 @@ Promise.all([
     cd3Tracks = normalizeTracks(cd3Data.games, true);
     cd4Tracks = normalizeTracks(cd4Data);
 
-    // Sorteer op trackNumber
     cd1Tracks.sort((a,b)=>a.trackNumber-b.trackNumber);
     cd2Tracks.sort((a,b)=>a.trackNumber-b.trackNumber);
     cd3Tracks.sort((a,b)=>a.trackNumber-b.trackNumber);
     cd4Tracks.sort((a,b)=>a.trackNumber-b.trackNumber);
 
     updateTrackList();
+    checkAllTracksCached(); // <-- direct checken zodat Download All knop zichtbaar is
 }).catch(err => console.error('Error loading tracks:', err));
+
 
 // ---------- RENDER TRACKLIST ----------
 function renderTracklist() {
@@ -335,9 +556,25 @@ document.getElementById('playInOrder')?.addEventListener('change',()=>updateTrac
 
 // ---------- DROPDOWN ----------
 const dropdown = document.querySelector(".dropdown"), toggle = document.querySelector(".dropdown-toggle");
-function toggleDropdown(event){event?.stopPropagation();if(!dropdown)return;if(dropdown.style.display==="flex"){dropdown.style.display="none";toggle.classList.remove("open");}else{dropdown.style.display="flex";toggle.classList.add("open");const rect=document.querySelector(".musicplayer").getBoundingClientRect();let left=rect.right+10;if(left+dropdown.offsetWidth>window.innerWidth)left=window.innerWidth-dropdown.offsetWidth-10;dropdown.style.left=left+"px";dropdown.style.top=rect.top+rect.height/2+"px";dropdown.style.transform="translateY(-50%)";}}
+function toggleDropdown(event){
+    event?.stopPropagation();
+    if(!dropdown) return;
+
+    dropdown.classList.toggle("open");
+    toggle.classList.toggle("open");
+}
+
 window.toggleDropdown=toggleDropdown;
-document.addEventListener("click",e=>{if(!dropdown||!toggle)return;if(!dropdown.contains(e.target)&&!toggle.contains(e.target)){dropdown.style.display="none";toggle.classList.remove("open");}});
+const settingsContainer = document.querySelector(".settings-container");
+
+document.addEventListener("click", e => {
+    if(!dropdown || !toggle || !settingsContainer) return;
+    if(!settingsContainer.contains(e.target)){
+        dropdown.classList.remove("open");
+        toggle.classList.remove("open");
+    }
+});
+
 
 // ---------- PROGRESS BAR & SCRUB ----------
 const progressContainer = document.querySelector('.progress-container');
@@ -429,4 +666,191 @@ controlButtons.forEach(button => {
         button.style.transform = 'scale(1)';
         button.blur();
     });
+});
+
+// ---------- HELPER: ALLE TRACKS COMBINEREN ----------
+function getAllTracks() {
+    return [
+        ...cd1Tracks,
+        ...cd2Tracks,
+        ...cd3Tracks,
+        ...cd4Tracks
+    ].filter(t => t.url && !excludedTracks.has(t.url));
+}
+
+async function checkAllTracksCached() {
+    const allTracks = getAllTracks();
+    if (!allTracks.length) return;
+
+    const downloadBtn = document.getElementById('downloadAllBtn');
+    const progressBarContainer = document.getElementById('downloadProgress');
+    const progressText = document.getElementById('downloadProgressText');
+    const cacheText = document.getElementById('cacheText');
+    const volume = document.querySelector('.volume-control-horizontal');
+
+    // if (isIOS) {
+    //     hideDownloadUI();
+    //     return;
+    // }
+
+    let cachedUrls = new Set();
+    try {
+        const cache = await caches.open(CACHE_NAME);
+        cachedUrls = new Set((await cache.keys()).map(r => r.url));
+    } catch (err) {
+        console.warn('Could not access cache, skipping cache check.', err);
+    }
+
+    const allResources = [];
+    for (const track of allTracks) {
+        if (track.url) allResources.push(new URL(track.url, location.origin).href);
+        if (track.artwork) allResources.push(new URL(track.artwork, location.origin).href);
+        else allResources.push(new URL('assets/player-img/cover.png', location.origin).href);
+    }
+
+    const allCached = allResources.every(url => cachedUrls.has(url));
+
+    if (!allCached) {
+        if (downloadBtn) downloadBtn.style.display = 'inline-block';
+        if (progressBarContainer) progressBarContainer.style.display = 'block';
+        if (progressText) progressText.style.display = 'inline-block';
+        if (cacheText) cacheText.style.display = 'inline';
+        if (volume) volume.style.marginTop = '0px';
+    } else {
+        hideDownloadUI();
+    }
+}
+
+
+// ---------- DOWNLOAD CURRENT TRACK ----------
+downloadCurrentBtn?.addEventListener('click', async () => {
+    const track = tracks[currentTrack];
+    if (!track || !track.url) return alert("No track available to download.");
+
+    try {
+        const blob = await getCachedAudio(track.url);
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        const safeTitle = track.title?.replace(/[\/\\?%*:|"<>]/g, '_') || 'track';
+        a.download = `${safeTitle}.m4a`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        await checkAllTracksCached(); // update UI na download
+    } catch (err) {
+        console.error('Could not download current track:', err);
+        alert('Download failed. Check console for details.');
+    }
+});
+
+// ---------- DOWNLOAD ALL TRACKS (AUDIO + ARTWORK) ----------
+downloadAllBtn?.addEventListener('click', async () => {
+    const downloadBtn = document.getElementById('downloadAllBtn');
+    const progressBarContainer = document.getElementById('downloadProgress');
+    const progressText = document.getElementById('downloadProgressText');
+    const progressBar = document.getElementById('downloadProgressBar');
+    const cacheText = document.getElementById('cacheText');
+
+    if (!downloadBtn) return;
+    downloadBtn.disabled = true;
+    progressBarContainer?.classList.add('show');
+    progressText?.classList.add('show');
+    if (cacheText) cacheText.style.display = 'inline';
+
+    const allTracks = getAllTracks();
+    const cache = await caches.open(CACHE_NAME);
+    const cachedUrls = new Set((await cache.keys()).map(r => r.url));
+
+    // Combineer audio, artwork, JSON, fallback assets
+    const allResources = allTracks.flatMap(track => [
+        track.url,
+        track.artwork || 'assets/player-img/cover.png'
+    ]);
+    allResources.push(
+        'tracksCD1.json',
+        'tracksCD2.json',
+        'tracksCD3.json',
+        'tracksCD4.json',
+        'assets/player-img/cover.png',
+        'assets/font/RacersDelight.otf'
+    );
+
+    const uniqueResources = [...new Set(allResources)];
+    const missingResources = uniqueResources.filter(url => !cachedUrls.has(new URL(url, location.origin).href));
+
+    const total = missingResources.length;
+    if (!total) {
+        progressText.textContent = 'All files are already cached!';
+        setTimeout(hideDownloadUI, 1000);
+        return;
+    }
+
+    let completed = 0;
+
+    for (const resourceUrl of missingResources) {
+        try {
+            const response = await fetch(resourceUrl);
+            if (response.ok) await cache.put(new URL(resourceUrl, location.origin).href, response.clone());
+        } catch (err) {
+            console.error('Error caching resource:', resourceUrl, err);
+        }
+
+        completed++;
+        const percent = Math.floor((completed / total) * 100);
+        if (progressBar) progressBar.style.width = percent + '%';
+        if (progressText) progressText.textContent = `Downloading ${completed} / ${total} files (${percent}%)`;
+        await new Promise(r => setTimeout(r, 30));
+    }
+
+    progressText.textContent = 'All files cached! Offline mode ready.';
+    await checkAllTracksCached();
+});
+
+
+
+// ---------- MOBILE LOAD FIX ----------
+window.addEventListener("load", async () => {
+    console.log("Page fully loaded — wait for track data...");
+
+    // Wacht tot de JSON-data geladen is
+    const waitForTracks = async () => {
+        for (let i = 0; i < 40; i++) { // max ±4s wachten
+            if (cd1Tracks.length || cd2Tracks.length || cd3Tracks.length || cd4Tracks.length) return true;
+            await new Promise(r => setTimeout(r, 100));
+        }
+        return false;
+    };
+
+    await waitForTracks();
+
+    // Geef browser een ademmoment om DOM klaar te zetten (belangrijk voor mobiel)
+    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 150)));
+
+    // Herinitialiseer UI pas na volledige page + tracks load
+    updateTrackList(true);
+
+    // Forceer dat artwork en titel direct kloppen (zeker bij eerste track)
+    const firstTrack = tracks[currentTrack];
+    if (firstTrack) {
+        titleEl.textContent = firstTrack.title || '-';
+        artworkEl.src = firstTrack.artwork || 'assets/player-img/cover.png';
+        gameEl.textContent = firstTrack.game || '';
+        gameEl.style.visibility = firstTrack.game ? 'visible' : 'hidden';
+        artworkEl.style.objectPosition = 'center center';
+    }
+
+    checkAllTracksCached();
+});
+
+self.addEventListener('fetch', event => {
+    const request = event.request;
+    if (request.mode === 'navigate') {
+        event.respondWith(
+            caches.match('/index.html').then(cached => cached || fetch(request))
+        );
+        return;
+    }
+
+    // andere fetches zoals audio/artwork gewoon cachen zoals eerder
 });

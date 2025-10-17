@@ -8,18 +8,22 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"/>
 <meta content="Mario Kart World Radio" property="og:title" />
 <meta content="Online radio that plays Mario Kart World music in a shuffled order" property="og:description" />
-<meta content="https://tzgaming.github.io/mkw-music-player/" property="og:url" />
-<meta content="https://tzgaming.github.io/mkw-music-player/assets/MKWR-embed.png" property="og:image">
+<meta content="https://mkworldradio.tzgaming.nl/" property="og:url" />
+<meta content="https://mkworldradio.tzgaming.nl/assets/icon.png" property="og:image">
 <meta content="#ff0000" data-react-helmet="true" name="theme-color" />
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<img src="assets/MKWR.png" width="350" alt="Logo" title="Logo made by ©Crappy Productions">  
+<img src="assets/MKWR.png" width="350" alt="Logo" title="Logo made by ©Crappy Productions">
 
 <br><br>
 
-<div class="musicplayer-wrapper">
+<div class="moved-txt">
+<h1>Mario Kart World Radio has been moved <a href="https://mkworldradio.tzgaming.nl/">here</a></h1>
+</div>
+
+<!-- <div class="musicplayer-wrapper">
 
     <div class="tracklist-container" id="tracklist">
         <h2>Track List</h2>
@@ -51,64 +55,75 @@
                       <button id="nextBtn"><i class="fa-solid fa-forward"></i></button>
                     </div>
                 </div>
-                <br>
+                    <div class="downloads">
+                        <button id="downloadCurrentBtn"><i class="fa-solid fa-download"></i> Current</button>
+
+                        <div class="download-all-wrapper">
+                            <button id="downloadAllBtn"><i class="fa-solid fa-download"></i> All (700 MB)</button>
+                            <span id="cacheText" class="cache-text">(Saves to cache)</span>
+                        </div>
+                    </div>
+
+                    <div id="downloadProgress" style="width:100%; background:#3d3d3d; height:8px; margin:4px 0 2px 0; display:none;">
+                        <div id="downloadProgressBar" style="width:0%; height:100%; background:#4caf50;"></div>
+                    </div>
+
+                    <span id="downloadProgressText" style="font-size:0.85em; display:none; margin-bottom:0px;"></span>
                 <div class="volume-control-horizontal">
+
                     <label for="volumeSlider">Volume</label>
                     <input type="range" id="volumeSlider" min="0" max="100" value="100">
                 </div>
             </div>
         </div>
+    </div>
+  </article>
+</div> -->
 
-        <!-- Settings dropdown -->
-        <div class="circle">
-            <button class="dropdown-toggle" onclick="toggleDropdown()">
-              <i class="fa-solid fa-gear"></i>
-            </button>
+  <footer>
+    <div class="footer-content">
+      <p>To check out some of my other radio players, go <a href="https://tzgaming.nl/">here</a></p>
+    </div>
 
+      <!-- <div class="dropdown" id="settingsDropdown">
+        <div class="dropdown-content">
+          <label class="switch">
+            <input type="checkbox" id="excludeCD1">
+            <span class="slider"></span>
+            Exclude CD1 - Grand Prix / Battle Tracks
+          </label>
+
+          <label class="switch">
+            <input type="checkbox" id="excludeCD2">
+            <span class="slider"></span>
+            Exclude CD2 - Mario Kart Series Free Roam
+          </label>
+
+          <label class="switch">
+            <input type="checkbox" id="excludeCD3">
+            <span class="slider"></span>
+            Exclude CD3 - Super Mario Series Free Roam
+          </label>
+
+          <label class="switch">
+            <input type="checkbox" id="excludeCD4">
+            <span class="slider"></span>
+            Exclude CD4 - Miscellaneous Songs
+          </label>
+
+          <label class="switch">
+            <input type="checkbox" id="playInOrder">
+            <span class="slider"></span>
+            Play tracks in order
+          </label>
         </div>
-
-        <div class="dropdown">
-            <div class="dropdown-content" id="dropdownContent">
-                <label class="switch">
-                    <input type="checkbox" id="excludeCD1">
-                    <span class="slider"></span>
-                    Exclude CD1 - Grand Prix / Battle Tracks
-                </label>
-
-                <label class="switch">
-                    <input type="checkbox" id="excludeCD2">
-                    <span class="slider"></span>
-                    Exclude CD2 - Mario Kart Series Free Roam
-                </label>
-
-                <label class="switch">
-                    <input type="checkbox" id="excludeCD3">
-                    <span class="slider"></span>
-                    Exclude CD3 - Super Mario Series Free Roam
-                </label>
-
-                <label class="switch">
-                    <input type="checkbox" id="excludeCD4">
-                    <span class="slider"></span>
-                    Exclude CD4 - Miscellaneous Songs
-                </label>
-
-                <label class="switch">
-                    <input type="checkbox" id="playInOrder">
-                    <span class="slider"></span>
-                    Play tracks in order
-                </label>
-            </div>
-        </div>
-
-    </article>
-</div>
-
-<footer>
-    <h4>Music by ©Nintendo</h4>
+      </div>
+    </div>
+  </div>
 </footer>
 
-<script src="player.js"></script>
+
+<script src="player.js"></script> -->
 
 </body>
 </html>
